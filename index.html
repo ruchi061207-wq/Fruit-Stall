@@ -130,10 +130,16 @@ GST % <input id="gst" value="0">
 let fruits=JSON.parse(localStorage.getItem("fruits"))||[
  {n:"Apple",r:100},{n:"Banana",r:80},{n:"Orange",r:60},{n:"Pineapple",r:40}
 ];
-let users=JSON.parse(localStorage.getItem("users"))||[
- {u:"admin",p:"admin",r:"admin"},
- {u:"staff",p:"staff",r:"staff"}
-];
+let users = JSON.parse(localStorage.getItem("users"));
+
+if (!users || users.length === 0) {
+ users = [
+  { u: "admin", p: "admin", r: "admin" },
+  { u: "staff", p: "staff", r: "staff" }
+ ];
+ localStorage.setItem("users", JSON.stringify(users));
+}
+
 let invoices=JSON.parse(localStorage.getItem("invoices"))||[];
 let currentUser=null;
 
@@ -284,3 +290,4 @@ function numWords(n){
 </script>
 </body>
 </html>
+
