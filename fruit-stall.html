@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fruit Billing System</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#f2f6f2;margin:0}
+header{background:linear-gradient(90deg,#1b5e20,#4caf50);color:#fff;padding:12px;text-align:center}
+.container{max-width:1000px;margin:auto;background:#fff;padding:15px}
+.hidden{display:none}
+nav button{margin:3px}
+input,select,button{padding:6px;border-radius:6px;border:1px solid #ccc}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #c8e6c9;padding:6px;text-align:center}
+th{background:#e8f5e9}
+.totalBox{background:#f1f8e9;padding:10px;border-radius:8px;margin-top:10px}
+.totalBox div{display:flex;justify-content:space-between}
+.grand{font-size:18px;font-weight:bold;color:#1b5e20}
+.noPrint{}
+.pdfHeader,.pdfFooter{display:none;text-align:center}
+.pdfMode .noPrint{display:none}
+.pdfMode .pdfHeader,.pdfMode .pdfFooter{display:block}
+@media print{.noPrint{display:none}}
+</style>
+</head>
+
+<body>
+
+<header>🍎 Fruit Billing System</header>
+
+<!-- LOGIN -->
+<div class="container" id="loginBox">
+<h3>Login</h3>
+<input id="user" placeholder="Username"><br><br>
+<input id="pass" type="password" placeholder="Password"><br><br>
+<button onclick="login()">Login</button>
+</div>
+
+<!-- APP -->
+<div class="container hidden" id="app">
+
+<nav class="noPrint">
+<button onclick="show('invoice')">Invoice</button>
+<button onclick="show('master')" id="mBtn">Fruit Master</button>
+<button onclick="show('users')" id="uBtn">Users</button>
+<button onclick="show('reports')" id="rBtn">Reports</button>
+<button onclick="logout()">Logout</button>
+</nav>
+
+<div class="pdfHeader">
+<h2>Fruit Billing System</h2>
+<hr>
+</div>
+
+<!-- INVOICE -->
+<section id="invoice">
+<h3>Invoice</h3>
+
+<div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px">
+<input id="invNo">
+<input id="cust" placeholder="Customer">
+<input type="date" id="invDate">
+</div>
+
+<table id="billTable">
+<tr>
+<th>Item</th><th>Kg</th><th>Rate</th><th>Amount</th>
+<th class="noPrint">X</th>
+</tr>
+</table>
+
+<button class="noPrint" onclick="addRow()">+ Add Item</button>
+
+<br><br>
+GST % <input id="gst" value="0">
+
+<div class="totalBox">
+<div><span>Sub Total</span><span>₹ <span id="sub">0.00</span></span></div>
+<div><span>CGST (<span id="cgstP">0</span>%)</span><span>₹ <span id="cgstA">0.00</span></span></div>
+<div><span>SGST (<span id="sgstP">0</span>%)</span><span>₹ <span id="sgstA">0.00</span></span></div>
+<div class="grand"><span>Grand Total</span><span>₹ <span id="grand">0.00</span></span></div>
+<div id="words">Rupees Only</div>
+</div>
+
+<div class="noPrint">
+<button onclick="saveInvoice()">Save</button>
+<button onclick="window.print()">Print</button>
+<button onclick="downloadPDF()">PDF</button>
+</div>
+</section>
+
+<!-- FRUIT MASTER -->
+<section id="master" class="hidden">
+<h3>Fruit Master</h3>
+<input id="fname" placeholder="Fruit">
+<input id="frate" placeholder="Rate">
+<button onclick="addFruit()">Add</button>
+<table id="fruitTable"></table>
+</section>
+
+<!-- USERS -->
+<section id="users" class="hidden">
+<h3>Users</h3>
+<input id="nu" placeholder="Username">
+<input id="np" placeholder="Password">
+<select id="nr"><option>admin</option><option>staff</option></select>
+<button onclick="addUser()">Add</button>
+<table id="userTable"></table>
+</section>
+
+<!-- REPORTS -->
+<section id="reports" class="hidden">
+<h3>Reports</h3>
+<button onclick="exportExcel()">Export Excel</button>
+</section>
+
+<div class="pdfFooter">
+<hr>
+<p>Thank you for your business</p>
+</div>
+
+</div>
+
+<script>
+/* ---------- DATA ---------- */
+let fruits=JSON.parse(localStorage.getItem("fruits"))||[
+ {n:"Apple",r:100},{n:"Banana",r:80},{n:"Orange",r:60},{n:"Pineapple",r:40}
+];
+let users=JSON.parse(localStorage.getItem("users"))||[
+ {u:"admin",p:"admin",r:"admin"},
+ {u:"staff",p:"staff",r:"staff"}
+];
+let invoices=JSON.parse(localStorage.getItem("invoices"))||[];
+let currentUser=null;
+
+/* ---------- LOGIN ---------- */
+function login(){
+ let f=users.find(x=>x.u===user.value && x.p===pass.value);
+ if(!f){alert("Invalid Login");return}
+ currentUser=f;
+ loginBox.classList.add("hidden");
+ app.classList.remove("hidden");
+ invDate.value=new Date().toISOString().split("T")[0];
+ invNo.value="INV-"+String(invoices.length+1).padStart(3,"0");
+
+ mBtn.style.display=uBtn.style.display=rBtn.style.display=
+   f.r==="admin"?"":"none";
+
+ addRow();
+}
+
+/* ---------- UI ---------- */
+function logout(){location.reload()}
+function show(id){
+ ["invoice","master","users","reports"].forEach(s=>document.getElementById(s).classList.add("hidden"));
+ document.getElementById(id).classList.remove("hidden");
+ if(id==="master")loadFruits();
+ if(id==="users")loadUsers();
+}
+
+/* ---------- BILLING ---------- */
+function addRow(){
+ let tr=document.createElement("tr");
+ tr.innerHTML=`
+ <td>
+ <select onchange="rateAuto(this)">
+ <option value="">Select</option>
+ ${fruits.map(f=>`<option>${f.n}</option>`).join("")}
+ </select>
+ </td>
+ <td><input type="number" value="1" oninput="calc()"></td>
+ <td><input type="number" oninput="calc()"></td>
+ <td>0.00</td>
+ <td class="noPrint"><button onclick="this.closest('tr').remove();calc()">X</button></td>
+ `;
+ billTable.appendChild(tr);
+}
+
+function rateAuto(el){
+ let f=fruits.find(x=>x.n===el.value);
+ el.closest("tr").cells[2].children[0].value=f?f.r:0;
+ calc();
+}
+
+gst.oninput=calc;
+
+function calc(){
+ let sub=0;
+ [...billTable.rows].slice(1).forEach(r=>{
+  let q=+r.cells[1].children[0].value||0;
+  let rate=+r.cells[2].children[0].value||0;
+  let amt=q*rate;
+  r.cells[3].innerText=amt.toFixed(2);
+  sub+=amt;
+ });
+ subElem=sub.toFixed(2);
+ document.getElementById("sub").innerText=subElem;
+
+ let g=+gst.value||0,half=g/2;
+ cgstP.innerText=sgstP.innerText=half;
+
+ let cg=sub*half/100,sg=sub*half/100;
+ cgstA.innerText=cg.toFixed(2);
+ sgstA.innerText=sg.toFixed(2);
+
+ let gt=sub+cg+sg;
+ grand.innerText=gt.toFixed(2);
+ words.innerText=numWords(gt);
+}
+
+/* ---------- SAVE ---------- */
+function saveInvoice(){
+ invoices.push({date:invDate.value,total:+grand.innerText});
+ localStorage.setItem("invoices",JSON.stringify(invoices));
+ alert("Saved");
+}
+
+/* ---------- PDF ---------- */
+function downloadPDF(){
+ document.body.classList.add("pdfMode");
+ html2pdf().from(app).set({filename:invNo.value+".pdf",jsPDF:{format:"a4"}})
+ .save().then(()=>document.body.classList.remove("pdfMode"));
+}
+
+/* ---------- FRUIT MASTER ---------- */
+function addFruit(){
+ fruits.push({n:fname.value,r:+frate.value});
+ localStorage.setItem("fruits",JSON.stringify(fruits));
+ loadFruits();
+}
+function loadFruits(){
+ fruitTable.innerHTML="<tr><th>Fruit</th><th>Rate</th><th>X</th></tr>";
+ fruits.forEach((f,i)=>{
+  fruitTable.innerHTML+=`<tr>
+  <td>${f.n}</td><td>${f.r}</td>
+  <td><button onclick="fruits.splice(${i},1);localStorage.setItem('fruits',JSON.stringify(fruits));loadFruits()">X</button></td>
+  </tr>`;
+ });
+}
+
+/* ---------- USERS ---------- */
+function addUser(){
+ users.push({u:nu.value,p:np.value,r:nr.value});
+ localStorage.setItem("users",JSON.stringify(users));
+ loadUsers();
+}
+function loadUsers(){
+ userTable.innerHTML="<tr><th>User</th><th>Role</th><th>X</th></tr>";
+ users.forEach((u,i)=>{
+  userTable.innerHTML+=`<tr>
+  <td>${u.u}</td><td>${u.r}</td>
+  <td><button onclick="users.splice(${i},1);localStorage.setItem('users',JSON.stringify(users));loadUsers()">X</button></td>
+  </tr>`;
+ });
+}
+
+/* ---------- REPORT ---------- */
+function exportExcel(){
+ let wb=XLSX.utils.book_new();
+ let data=[["Date","Amount"]];
+ invoices.forEach(i=>data.push([i.date,i.total]));
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),"Collection");
+ XLSX.writeFile(wb,"Reports.xlsx");
+}
+
+/* ---------- NUMBER TO WORDS ---------- */
+function numWords(n){
+ let a=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten",
+ "Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+ let b=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+ function w(num){
+  if(num<20)return a[num];
+  if(num<100)return b[Math.floor(num/10)]+" "+a[num%10];
+  if(num<1000)return a[Math.floor(num/100)]+" Hundred "+w(num%100);
+  if(num<100000)return w(Math.floor(num/1000))+" Thousand "+w(num%1000);
+  return w(Math.floor(num/100000))+" Lakh "+w(num%100000);
+ }
+ return w(Math.floor(n))+" Rupees Only";
+}
+</script>
+</body>
+</html>
