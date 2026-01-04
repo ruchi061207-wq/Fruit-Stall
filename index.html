@@ -217,6 +217,19 @@ function calc(){
  grand.innerText=gt.toFixed(2);
  words.innerText=numWords(gt);
 }
+ function refreshInvoiceDropdowns(){
+ // reload fruits from storage
+ fruits = JSON.parse(localStorage.getItem("fruits")) || fruits;
+
+ [...billTable.rows].slice(1).forEach(row=>{
+  let sel = row.cells[0].children[0];
+  let selected = sel.value;
+
+  sel.innerHTML = `<option value="">Select</option>` +
+   fruits.map(f=>`<option ${f.n===selected?"selected":""}>${f.n}</option>`).join("");
+ });
+}
+
 
 /* ---------- SAVE ---------- */
 function saveInvoice(){
@@ -234,10 +247,22 @@ function downloadPDF(){
 
 /* ---------- FRUIT MASTER ---------- */
 function addFruit(){
+ if(!fname.value || !frate.value){
+  alert("Enter fruit name and rate");
+  return;
+ }
+
  fruits.push({n:fname.value,r:+frate.value});
  localStorage.setItem("fruits",JSON.stringify(fruits));
  loadFruits();
+
+ // 🔄 Refresh invoice dropdowns
+ refreshInvoiceDropdowns();
+
+ fname.value="";
+ frate.value="";
 }
+
 function loadFruits(){
  fruitTable.innerHTML="<tr><th>Fruit</th><th>Rate</th><th>X</th></tr>";
  fruits.forEach((f,i)=>{
@@ -290,4 +315,5 @@ function numWords(n){
 </script>
 </body>
 </html>
+
 
